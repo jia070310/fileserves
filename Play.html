@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8播放器 - 文件管理服务器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Hls.js 库用于播放 M3U8 格式 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.11/dist/hls.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            background-color: #0f1117;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1400px;
+            width: 100%;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .player-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 比例 */
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        #videoPlayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .url-input:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .secondary-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
+        }
+        
+        .danger-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+        
+        .danger-btn:hover {
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+        
+        .playlist-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .playlist {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 500px;
+        }
+        
+        .playlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+        
+        .playlist-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(102, 126, 234, 0.3);
+        }
+        
+        .playlist-item.active {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        
+        .playlist-item-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .playlist-item-icon {
+            font-size: 1.2rem;
+            color: #667eea;
+        }
+        
+        .playlist-item-details {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .playlist-item-name {
+            font-weight: 500;
+            color: white;
+            margin-bottom: 2px;
+        }
+        
+        .playlist-item-url {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 500px;
+        }
+        
+        .playlist-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* 播放设置区域样式 */
+        .player-settings {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 15px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .setting-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .setting-select {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            font-size: 0.9rem;
+            min-width: 120px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        /* 修复下拉框选项颜色问题 */
+        .setting-select option {
+            background: #2a2e3e;
+            color: white;
+            padding: 8px;
+        }
+        
+        .setting-select:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .setting-select:focus {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+        
+        /* 分页样式 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        
+        .page-btn {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .page-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .page-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .page-info {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0 15px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .btn {
+                justify-content: center;
+            }
+            
+            .player-settings {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .setting-group {
+                justify-content: space-between;
+            }
+            
+            .playlist-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .playlist-item-actions {
+                justify-content: center;
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>M3U8播放器</h1>
+        <p>专业的在线流媒体播放工具</p>
+    </div>
+    
+    <div class="content">
+        <div class="player-section">
+            <div class="video-container">
+                <video id="videoPlayer" controls></video>
+            </div>
+            
+            <div class="controls">
+                <input type="text" id="m3u8Url" class="url-input" placeholder="输入M3U8流地址或视频文件URL(MP4/MKV/FLV/MOV等)或音频文件(APE/MP3/WAV等)" value="">
+                <button class="btn" id="loadBtn"><i class="fas fa-play-circle"></i> 加载播放</button>
+                <button class="btn secondary-btn" id="stopBtn"><i class="fas fa-stop-circle"></i> 停止播放</button>
+                <button class="btn secondary-btn" id="saveBtn"><i class="fas fa-save"></i> 添加到播放列表</button>
+                <button class="btn secondary-btn" id="clearBtn"><i class="fas fa-trash-alt"></i> 清空</button>
+            </div>
+            
+            <!-- 播放设置区域 - 移到播放链接框下方 -->
+            <div class="player-settings">
+                <div class="setting-group">
+                    <label class="setting-label">清晰度选择:</label>
+                    <select class="setting-select" id="qualitySelect">
+                        <option value="auto">自动</option>
+                        <option value="high">高清</option>
+                        <option value="medium">标清</option>
+                        <option value="low">流畅</option>
+                    </select>
+                </div>
+                
+                <div class="setting-group">
+                    <label class="setting-label">播放模式:</label>
+                    <select class="setting-select" id="playModeSelect">
+                        <option value="single" selected>单曲播放</option>
+                        <option value="single-loop">单曲循环</option>
+                        <option value="list-loop">列表循环</option>
+                        <option value="shuffle">随机播放</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="playlist-section">
+            <div class="section-header">
+                <h2><i class="fas fa-list"></i> 播放列表 <span style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.6); font-weight: normal;">(列表文件储存在本地，不会上传到服务器。也请注意保存列表文件)</span></h2>
+                <div>
+                    <button class="btn secondary-btn" id="importBtn"><i class="fas fa-upload"></i> 导入列表</button>
+                    <button class="btn secondary-btn" id="exportBtn"><i class="fas fa-download"></i> 导出列表</button>
+                    <button class="btn danger-btn" id="clearAllBtn"><i class="fas fa-trash"></i> 清空列表</button>
+                </div>
+            </div>
+            
+            <div class="playlist" id="playlist">
+                <!-- 播放列表项将通过JavaScript动态生成 -->
+            </div>
+            
+            <!-- 分页控件 -->
+            <div class="pagination" id="pagination">
+                <!-- 分页按钮将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>© 2023 文件管理服务器 | <a href="index.html">返回首页</a> | <a href="files.html">文件浏览</a></p>
+    </div>
+    
+    <script>
+        // 获取DOM元素
+        const videoPlayer = document.getElementById('videoPlayer');
+        const m3u8Url = document.getElementById('m3u8Url');
+        const loadBtn = document.getElementById('loadBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const playlist = document.getElementById('playlist');
+        const importBtn = document.getElementById('importBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const qualitySelect = document.getElementById('qualitySelect');
+        const playModeSelect = document.getElementById('playModeSelect');
+        const pagination = document.getElementById('pagination');
+        
+        // 全局变量
+        let hls = null;
+        let currentQuality = 'auto';
+        let currentPlayMode = 'single';
+        let playlistItems = [];
+        try {
+            const storedPlaylist = localStorage.getItem('m3u8Playlist');
+            if (storedPlaylist) {
+                playlistItems = JSON.parse(storedPlaylist);
+                // 确保playlistItems是数组
+                if (!Array.isArray(playlistItems)) {
+                    playlistItems = [];
+                }
+            }
+        } catch (e) {
+            console.error('解析播放列表失败:', e);
+            playlistItems = [];
+        }
+        let currentPage = 1;
+        const itemsPerPage = 15;
+        
+        // 初始化播放器
+        function initPlayer() {
+            // 尝试加载本地存储的播放列表
+            if (playlistItems.length > 0) {
+                renderPlaylist();
+            } else {
+                showEmptyPlaylistMessage();
+            }
+        }
+        
+        // 检测媒体类型
+        function detectMediaType(url) {
+            if (!url) return 'unknown';
+            
+            const lowerUrl = url.toLowerCase();
+            
+            // 检查是否是M3U8格式（包括IPTV直播链接）
+            if (lowerUrl.endsWith('.m3u8') || lowerUrl.includes('.m3u8?') || lowerUrl.includes('hls/')) {
+                return 'm3u8';
+            }
+            
+            // 检查是否是MP4格式
+            if (lowerUrl.endsWith('.mp4') || lowerUrl.includes('.mp4?')) {
+                return 'mp4';
+            }
+            
+            // 检查是否是其他视频格式
+            const videoExtensions = ['.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'];
+            for (const ext of videoExtensions) {
+                if (lowerUrl.endsWith(ext) || lowerUrl.includes(ext + '?')) {
+                    return 'mp4'; // 当作MP4处理
+                }
+            }
+            
+            // 检查是否是音频格式
+            const audioExtensions = ['.mp3', '.wav', '.aac', '.flac', '.m4a', '.wma', '.ogg', '.ape'];
+            for (const ext of audioExtensions) {
+                if (lowerUrl.endsWith(ext) || lowerUrl.includes(ext + '?')) {
+                    return 'audio';
+                }
+            }
+            
+            // 如果无法从URL判断，默认为M3U8（支持更多IPTV链接）
+            return 'm3u8';
+        }
+        
+        // 加载媒体文件（自动识别M3U8、MP4或音频）
+        function loadMedia(url) {
+            // 销毁之前的Hls实例
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            
+            const mediaUrl = url || m3u8Url.value.trim();
+            
+            if (!mediaUrl) {
+                // 如果没有输入URL，显示提示
+                alert('请输入媒体地址');
+                return;
+            }
+            
+            try {
+                // 更新输入框
+                m3u8Url.value = mediaUrl;
+                
+                // 标记当前活动的播放列表项
+                document.querySelectorAll('.playlist-item').forEach(item => {
+                    if (item.getAttribute('data-url') === mediaUrl) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+                
+                // 自动检测媒体类型
+                const mediaType = detectMediaType(mediaUrl);
+                
+                if (mediaType === 'm3u8') {
+                    // 播放M3U8流
+                    if (Hls.isSupported()) {
+                        hls = new Hls();
+                        
+                        // 设置清晰度
+                        if (currentQuality !== 'auto') {
+                            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                                const availableLevels = data.levels;
+                                let targetLevel = availableLevels.length - 1; // 默认最高清
+                                
+                                if (currentQuality === 'medium' && availableLevels.length > 2) {
+                                    targetLevel = Math.floor(availableLevels.length / 2);
+                                } else if (currentQuality === 'low') {
+                                    targetLevel = 0;
+                                }
+                                
+                                hls.levels = targetLevel;
+                            });
+                        }
+                        
+                        hls.loadSource(mediaUrl);
+                        hls.attachMedia(videoPlayer);
+                        
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                            videoPlayer.play().catch(error => {
+                                console.warn('自动播放失败，需要用户交互:', error);
+                            });
+                        });
+                        
+                        hls.on(Hls.Events.ERROR, (event, data) => {
+                            console.error('HLS播放错误:', data);
+                            if (data.fatal) {
+                                switch(data.type) {
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                        // 静默处理，不显示提示
+                                        break;
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                        // 静默处理，不显示提示
+                                        break;
+                                    default:
+                                        // 静默处理，不显示提示
+                                        hls.destroy();
+                                        break;
+                                }
+                            }
+                        });
+                    } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                        videoPlayer.src = mediaUrl;
+                        videoPlayer.addEventListener('loadedmetadata', () => {
+                            videoPlayer.play().catch(error => {
+                                console.warn('自动播放失败，需要用户交互:', error);
+                            });
+                        });
+                    }
+                } else if (mediaType === 'audio') {
+                    // 播放音频文件
+                    videoPlayer.src = mediaUrl;
+                    videoPlayer.addEventListener('loadedmetadata', () => {
+                        videoPlayer.play().catch(error => {
+                            console.warn('自动播放失败，需要用户交互:', error);
+                        });
+                    });
+                    
+                    videoPlayer.addEventListener('error', (error) => {
+                        console.error('音频播放错误:', error);
+                        // 静默处理，不显示提示
+                    });
+                } else {
+                    // 播放MP4或其他视频文件
+                    videoPlayer.src = mediaUrl;
+                    videoPlayer.addEventListener('loadedmetadata', () => {
+                        videoPlayer.play().catch(error => {
+                            console.warn('自动播放失败，需要用户交互:', error);
+                        });
+                    });
+                    
+                    videoPlayer.addEventListener('error', (error) => {
+                        console.error('视频播放错误:', error);
+                        // 静默处理，不显示提示
+                    });
+                }
+            } catch (error) {
+                console.error('加载媒体失败:', error);
+                // 静默处理，不显示提示
+            }
+        }
+        
+        // 添加到播放列表
+        function addToPlaylist() {
+            const url = m3u8Url.value.trim();
+            if (!url) {
+                alert('请输入媒体地址');
+                return;
+            }
+            
+            const mediaType = detectMediaType(url);
+            let defaultName = '未命名媒体';
+            
+            if (mediaType === 'm3u8') {
+                defaultName = '未命名流';
+            } else if (mediaType === 'audio') {
+                defaultName = '未命名音频';
+            } else {
+                defaultName = '未命名视频';
+            }
+            
+            const name = prompt(`请输入媒体名称:`, defaultName);
+            if (!name) return;
+            
+            // 检查是否已存在
+            const exists = playlistItems.some(item => {
+                // 标准化URL进行比较
+                const itemUrl = item.url.trim();
+                const newUrl = url.trim();
+                return itemUrl === newUrl;
+            });
+            if (exists) {
+                alert('该媒体已在播放列表中');
+                return;
+            }
+            
+            // 直接添加到列表，无需再次确认
+            playlistItems.push({
+                id: Date.now(),
+                name: name,
+                url: url,
+                type: mediaType,
+                addTime: new Date().toISOString()
+            });
+            
+            // 保存到本地存储
+            savePlaylist();
+            
+            // 重新渲染列表，重置到第一页
+            currentPage = 1;
+            renderPlaylist();
+        }
+        
+        // 从播放列表删除
+        function removeFromPlaylist(id) {
+            playlistItems = playlistItems.filter(item => item.id !== id);
+            savePlaylist();
+            currentPage = 1; // 重置到第一页
+            renderPlaylist();
+        }
+        
+        // 清空输入框
+        function clearInput() {
+            m3u8Url.value = '';
+        }
+        
+        // 渲染播放列表
+        function renderPlaylist() {
+            playlist.innerHTML = '';
+            
+            if (playlistItems.length === 0) {
+                showEmptyPlaylistMessage();
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            // 计算分页
+            const totalPages = Math.ceil(playlistItems.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, playlistItems.length);
+            const currentItems = playlistItems.slice(startIndex, endIndex);
+            
+            // 渲染当前页的项目
+            currentItems.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'playlist-item';
+                itemElement.setAttribute('data-url', item.url);
+                itemElement.setAttribute('data-id', item.id);
+                
+                // 根据类型显示不同图标
+                let iconClass = 'fa-video';
+                if (item.type === 'mp4') {
+                    iconClass = 'fa-file-video';
+                } else if (item.type === 'audio') {
+                    iconClass = 'fa-music';
+                }
+                
+                itemElement.innerHTML = `
+                    <div class="playlist-item-info">
+                        <div class="playlist-item-icon"><i class="fas ${iconClass}"></i></div>
+                        <div class="playlist-item-details">
+                            <div class="playlist-item-name">${item.name}</div>
+                            <div class="playlist-item-url">${item.url}</div>
+                        </div>
+                    </div>
+                    <div class="playlist-item-actions">
+                        <button class="action-btn play-btn"><i class="fas fa-play"></i></button>
+                        <button class="action-btn delete-btn"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                
+                // 添加播放按钮事件
+                itemElement.querySelector('.play-btn').addEventListener('click', () => {
+                    loadMedia(item.url);
+                });
+                
+                // 添加删除按钮事件
+                itemElement.querySelector('.delete-btn').addEventListener('click', (e) => {
+                    e.stopPropagation(); // 阻止冒泡
+                    if (confirm(`确定要删除 "${item.name}" 吗？`)) {
+                        removeFromPlaylist(item.id);
+                    }
+                });
+                
+                // 添加点击事件
+                itemElement.addEventListener('click', () => {
+                    loadMedia(item.url);
+                });
+                
+                playlist.appendChild(itemElement);
+            });
+            
+            // 渲染分页控件
+            renderPagination(totalPages);
+        }
+        
+        // 显示空播放列表消息
+        function showEmptyPlaylistMessage() {
+            playlist.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: rgba(255, 255, 255, 0.6);">
+                    <i class="fas fa-music" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                    <p>播放列表为空</p>
+                    <p style="font-size: 0.9rem; margin-top: 5px;">添加M3U8流地址或视频文件(MP4/MKV/FLV/MOV等)并保存到播放列表</p>
+                </div>
+            `;
+        }
+        
+        // 清空输入框
+        function clearInput() {
+            m3u8Url.value = '';
+        }
+        
+        // 导出播放列表为M3U格式
+        function exportPlaylist() {
+            if (playlistItems.length === 0) {
+                alert('播放列表为空，无法导出');
+                return;
+            }
+            
+            try {
+                // 生成M3U格式内容
+                let m3uContent = '#EXTM3U\n';
+                
+                playlistItems.forEach(item => {
+                    // 添加EXTINF信息
+                    m3uContent += `#EXTINF:-1,${item.name}\n`;
+                    // 添加URL
+                    m3uContent += `${item.url}\n`;
+                });
+                
+                // 让用户输入文件名
+                const fileName = prompt('请输入导出文件名:', 'playlist.m3u');
+                if (!fileName) return; // 用户取消了输入
+                
+                // 确保文件名以.m3u结尾
+                const finalFileName = fileName.endsWith('.m3u') ? fileName : fileName + '.m3u';
+                
+                // 创建Blob对象
+                const blob = new Blob([m3uContent], { type: 'application/x-mpegURL' });
+                
+                // 创建下载链接
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = finalFileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                // 清理
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                alert(`成功导出 ${playlistItems.length} 个项目到播放列表`);
+            } catch (error) {
+                console.error('导出播放列表失败:', error);
+                alert('导出失败: ' + error.message);
+            }
+        }
+        
+        // 渲染分页控件
+        function renderPagination(totalPages) {
+            pagination.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            // 上一页按钮
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'page-btn';
+            prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderPlaylist();
+                }
+            });
+            pagination.appendChild(prevBtn);
+            
+            // 页码按钮
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            // 调整起始页码以确保显示足够的页码
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                pageBtn.textContent = i;
+                pageBtn.addEventListener('click', () => {
+                    currentPage = i;
+                    renderPlaylist();
+                });
+                pagination.appendChild(pageBtn);
+            }
+            
+            // 下一页按钮
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'page-btn';
+            nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderPlaylist();
+                }
+            });
+            pagination.appendChild(nextBtn);
+            
+            // 页面信息
+            const pageInfo = document.createElement('div');
+            pageInfo.className = 'page-info';
+            pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+            pagination.appendChild(pageInfo);
+        }
+        
+        // 保存播放列表到本地存储
+        function savePlaylist() {
+            localStorage.setItem('m3u8Playlist', JSON.stringify(playlistItems));
+        }
+        
+        // 停止播放媒体
+        function stopMedia() {
+            // 暂停播放
+            videoPlayer.pause();
+            
+            // 清空视频源
+            videoPlayer.src = '';
+            
+            // 如果使用了HLS，销毁HLS实例
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            
+            // 清空输入框
+            m3u8Url.value = '';
+            
+            // 移除活动播放列表项的高亮
+            document.querySelectorAll('.playlist-item').forEach(item => {
+                item.classList.remove('active');
+            });
+        }
+        
+        // 导入M3U播放列表
+        function importM3UPlaylist() {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.m3u,.m3u8';
+            
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target.result;
+                        const lines = content.split('\n');
+                        let importedCount = 0;
+                        
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            
+                            // 跳过空行和注释
+                            if (!line || line.startsWith('#')) continue;
+                            
+                            // 检查是否是URL
+                            if (line.startsWith('http://') || line.startsWith('https://')) {
+                                // 尝试从上一行获取名称（如果有）
+                                let name = `导入项目 ${importedCount + 1}`;
+                                if (i > 0 && lines[i-1].startsWith('#EXTINF:')) {
+                                    const nameMatch = lines[i-1].match(/,(.*)$/);
+                                    if (nameMatch && nameMatch[1]) {
+                                        name = nameMatch[1].trim();
+                                    }
+                                }
+                                
+                                // 检查是否已存在
+                                const exists = playlistItems.some(item => {
+                                    // 标准化URL进行比较
+                                    const itemUrl = item.url.trim();
+                                    const newUrl = line.trim();
+                                    return itemUrl === newUrl;
+                                });
+                                if (!exists) {
+                                    const mediaType = detectMediaType(line);
+                                    playlistItems.push({
+                                        id: Date.now() + importedCount,
+                                        name: name,
+                                        url: line,
+                                        type: mediaType,
+                                        addTime: new Date().toISOString()
+                                    });
+                                    importedCount++;
+                                }
+                            }
+                        }
+                        
+                        if (importedCount > 0) {
+                            savePlaylist();
+                            currentPage = 1; // 重置到第一页
+                            renderPlaylist();
+                            alert(`成功导入 ${importedCount} 个项目到播放列表`);
+                        } else {
+                            alert('没有找到有效的媒体URL，或者所有项目都已存在于播放列表中');
+                        }
+                    } catch (error) {
+                        console.error('导入M3U文件失败:', error);
+                        alert('导入失败: ' + error.message);
+                    }
+                };
+                
+                reader.readAsText(file);
+            });
+            
+            // 确保文件输入元素被添加到DOM中再触发点击事件
+            document.body.appendChild(fileInput);
+            fileInput.style.display = 'none'; // 隐藏文件输入元素
+            fileInput.click();
+        }
+        
+        // 清空播放列表
+        function clearPlaylist() {
+            if (playlistItems.length === 0) {
+                alert('播放列表已经是空的');
+                return;
+            }
+            
+            if (confirm('确定要清空整个播放列表吗？此操作不可撤销！')) {
+                playlistItems = [];
+                currentPage = 1; // 重置当前页码
+                savePlaylist();
+                renderPlaylist();
+                alert('播放列表已清空');
+            }
+        }
+        
+        // 事件监听
+        loadBtn.addEventListener('click', () => loadMedia());
+        stopBtn.addEventListener('click', stopMedia);
+        saveBtn.addEventListener('click', addToPlaylist);
+        clearBtn.addEventListener('click', clearInput);
+        importBtn.addEventListener('click', importM3UPlaylist);
+        exportBtn.addEventListener('click', exportPlaylist);
+        clearAllBtn.addEventListener('click', clearPlaylist);
+        
+        // 清晰度选择事件
+        qualitySelect.addEventListener('change', () => {
+            currentQuality = qualitySelect.value;
+            alert(`清晰度已设置为: ${qualitySelect.options[qualitySelect.selectedIndex].text}`);
+            if (hls && currentQuality !== 'auto') {
+                // 重新加载以应用新的清晰度设置
+                const currentUrl = m3u8Url.value.trim();
+                if (currentUrl) {
+                    loadMedia(currentUrl);
+                }
+            }
+        });
+        
+        // 播放模式选择事件
+        playModeSelect.addEventListener('change', () => {
+            currentPlayMode = playModeSelect.value;
+            alert(`播放模式已设置为: ${playModeSelect.options[playModeSelect.selectedIndex].text}`);
+            // 实际的播放模式逻辑需要根据videoPlayer的ended事件来实现
+        });
+        
+        // 播放下一个（根据播放模式）
+        function playNext() {
+            const currentUrl = m3u8Url.value.trim();
+            const currentIndex = playlistItems.findIndex(item => item.url === currentUrl);
+            
+            if (currentIndex !== -1) {
+                let nextIndex;
+                
+                if (currentPlayMode === 'shuffle') {
+                    // 随机播放
+                    do {
+                        nextIndex = Math.floor(Math.random() * playlistItems.length);
+                    } while (nextIndex === currentIndex && playlistItems.length > 1);
+                } else if (currentPlayMode === 'list-loop') {
+                    // 列表循环
+                    nextIndex = (currentIndex + 1) % playlistItems.length;
+                }
+                
+                if (playlistItems[nextIndex]) {
+                    // 加载下一个媒体
+                    loadMedia(playlistItems[nextIndex].url);
+                }
+            }
+        }
+        
+        // 视频结束事件
+        videoPlayer.addEventListener('ended', () => {
+            if (currentPlayMode === 'single-loop') {
+                // 单曲循环
+                videoPlayer.currentTime = 0;
+                videoPlayer.play();
+            } else if (currentPlayMode === 'loop') {
+                // 循环播放（保持向后兼容）
+                videoPlayer.currentTime = 0;
+                videoPlayer.play();
+            } else if ((currentPlayMode === 'list-loop' || currentPlayMode === 'shuffle') && playlistItems.length > 0) {
+                playNext();
+            }
+            // 单曲播放模式下不执行任何操作
+        });
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            switch(e.key.toLowerCase()) {
+                case ' ':
+                case 'k':
+                    if (videoPlayer.paused) {
+                        videoPlayer.play();
+                    } else {
+                        videoPlayer.pause();
+                    }
+                    break;
+                case 'arrowright':
+                    videoPlayer.currentTime += 10;
+                    break;
+                case 'arrowleft':
+                    videoPlayer.currentTime -= 10;
+                    break;
+                case 'arrowup':
+                    videoPlayer.volume = Math.min(1, videoPlayer.volume + 0.1);
+                    break;
+                case 'arrowdown':
+                    videoPlayer.volume = Math.max(0, videoPlayer.volume - 0.1);
+                    break;
+                case 'f':
+                    if (videoPlayer.requestFullscreen) {
+                        videoPlayer.requestFullscreen();
+                    } else if (videoPlayer.webkitRequestFullscreen) {
+                        videoPlayer.webkitRequestFullscreen();
+                    } else if (videoPlayer.msRequestFullscreen) {
+                        videoPlayer.msRequestFullscreen();
+                    }
+                    break;
+                case 'm':
+                    videoPlayer.muted = !videoPlayer.muted;
+                    break;
+                case 'n':
+                    if (playlistItems.length > 0) {
+                        playNext();
+                    }
+                    break;
+            }
+        });
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            // 设置初始焦点
+            m3u8Url.focus();
+            initPlayer();
+        });
+    </script>
+</body>
+</html>

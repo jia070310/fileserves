@@ -1,0 +1,7 @@
+
+
+
+    1. php安装扩展fileinfo、GD
+    2.修改api.php文件 
+              // 设置根目录
+$rootDir = '/www/wwwroot/fileserves/wendang';
