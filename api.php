@@ -20,7 +20,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 // 获取请求路径
 $path = isset($_GET['path']) ? $_GET['path'] : '';
 
-// 获取项目根目录
+// 获取项目根目录 (目录修改为你实际目录或者启用灵活目录方法)
 $rootDir = '/www/wwwroot/fileserves/wendang';
 
 // 检查是否是搜索请求
